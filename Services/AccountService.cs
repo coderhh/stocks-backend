@@ -8,6 +8,12 @@ using System.Linq;
 using System;
 using System.Security.Cryptography;
 using stocks_backend.Entities;
+using stocks_backend.Helpers;
+using System.IdentityModel.Tokens.Jwt;
+using System.Text;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
+using System.Collections.Generic;
 
 namespace stocks_backend.Services
 {
@@ -15,6 +21,8 @@ namespace stocks_backend.Services
     {
         AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress);
         void Register(RegisterRequest model, string origin);
+        void VerifyEmail(string token);
+        void Delete(int id);
     }
 
     public class AccountService : IAccountService
@@ -37,7 +45,60 @@ namespace stocks_backend.Services
         }
         public AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress)
         {
-            throw new System.NotImplementedException();
+            var account = _context.Accounts.SingleOrDefault(x => x.Email == model.Email);
+
+            if (account == null || !account.IsVerified || !BC.Verify(model.Password, account.PasswordHash))
+                throw new AppException("Email or password is incorrect");
+
+            // authenticate successful so generate jwt and refresh tokens
+            var jwtToken = generateJwtToken(account);
+            var refreshToken = generateRefreshToken(ipAddress);
+            account.RefreshTokens.Add(refreshToken);
+
+            // remove old refresh tokens from account
+            removeOldRefreshTokens(account);
+
+            // save changes to db
+            _context.Update(account);
+            _context.SaveChanges();
+
+            var response = _mapper.Map<AuthenticateResponse>(account);
+            response.JwtToken = jwtToken;
+            response.RefreshToken = refreshToken.Token;
+            return response;
+        }
+
+        private void removeOldRefreshTokens(Account account)
+        {
+            account.RefreshTokens.RemoveAll(x =>
+                    !x.IsActive && x.Created.AddDays(_appSettings.RefreshTokenTTL) <= DateTime.UtcNow);
+        }
+
+        private RefreshToken generateRefreshToken(string ipAddress)
+        {
+
+            return new RefreshToken
+            {
+                Token = randomTokenString(),
+                Expires = DateTime.UtcNow.AddDays(7),
+                Created = DateTime.UtcNow,
+                CreatedByIp = ipAddress
+            };
+        }
+
+        private string  generateJwtToken(Account account)
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key  = Encoding.ASCII.GetBytes(_appSettings.Secret);
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new[]  { new Claim("id", account.Id.ToString()) }),
+                Expires = DateTime.UtcNow.AddMinutes(15),
+                SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+            };
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            return tokenHandler.WriteToken(token);
+
         }
 
         public void Register(RegisterRequest model, string origin)
@@ -118,6 +179,32 @@ namespace stocks_backend.Services
                          <p>Your email <strong>{email}</strong> is already registered.</p>
                          {message}"
             );
+        }
+
+        public void VerifyEmail(string token)
+        {
+            var account = _context.Accounts.SingleOrDefault(x => x.VerificationToken == token);
+            if (account == null) throw new AppException("Verification failed");
+
+            account.Verified = DateTime.UtcNow;
+            account.VerificationToken = null;
+
+            _context.Accounts.Update(account);
+            _context.SaveChanges();
+        }
+
+        public void Delete(int id)
+        {
+            var account = getAccount(id);
+            _context.Accounts.Remove(account);
+            _context.SaveChanges();
+        }
+
+        private Account getAccount(int id)
+        {
+            var account = _context.Accounts.Find(id);
+            if (account == null) throw new KeyNotFoundException("Account not found");
+            return account;
         }
     }
 }

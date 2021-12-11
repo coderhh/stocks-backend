@@ -11,6 +11,7 @@ namespace stocks_backend.Heplers
         {
             CreateMap<Account, AccountResponse>();
             CreateMap<RegisterRequest, Account>();
+            CreateMap<Account, AuthenticateResponse>();
         }
     }
 }
