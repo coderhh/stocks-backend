@@ -7,6 +7,7 @@ using stocks_backend.Services;
 using System;
 using stocks_backend.Entities;
 using stocks_backend.Models;
+using stocks_backend.Helpers;
 
 namespace stocks_backend.Controllers
 {
@@ -30,6 +31,60 @@ namespace stocks_backend.Controllers
             setTokenCookie(response.RefreshToken);
             return Ok(response);
         }
+
+        [HttpPost("refresh-token")]
+        public ActionResult<AuthenticateResponse> RefreshToken()
+        {
+            var refreshToken = Request.Cookies["refreshToken"];
+            var response = _accountService.RefreshToken(refreshToken, ipAddress());
+            setTokenCookie(response.RefreshToken);
+            return Ok(response);
+        }
+        [Authorize]
+        [HttpPost("revoke-token")]
+        public IActionResult RevokeToken(RevokeTokenRequest model)
+        {
+            // accept token from request body or cookie
+            var token  = model.Token ?? Request.Cookies["refreshToken"];
+            if(string.IsNullOrEmpty(token)){
+                return BadRequest(new { message = "Token is required"});
+            }
+
+            // users can revoke their own tokens and admins can revoke any tokens
+            if(!Account.OwnsToken(token) && Account.Role != Role.Admin)
+                return Unauthorized(new { message = "Unauthorized" });
+            _accountService.RevokeToken(token, ipAddress());
+            return Ok(new { message = "Token revoked"});
+        }
+         [HttpPost("register")]
+        public IActionResult Register(RegisterRequest model)
+        {
+            _accountService.Register(model, Request.Headers["origin"]);
+            return Ok(new { message = "Registration successful, please check your email for verification instructions" });
+        }
+        [HttpPost("verify-email")]
+        public IActionResult VerifyEmail(VerifyEmailRequest model)
+        {
+            _accountService.VerifyEmail(model.Token);
+            return Ok(new { message = "Verification successful, you can now login"});
+        }
+        [HttpPost("forget-password")]
+        public IActionResult ForgetPassword(ForgotPasswordRequest model)
+        {
+            _accountService.ForgotPassword(model, Request.Headers["origin"]);
+            return Ok(new { message = "Please check your email for password reset instructions"});
+        }
+
+        [HttpDelete("{id:int}")]
+        public IActionResult Delete(int id)
+        {
+            //users can delete their own account and admin can delete any account
+            if (id != Account.Id && Account.Role != Role.Admin)
+               return Unauthorized(new { message = "Unauthorized"});
+            _accountService.Delete(id);
+            return Ok(new { message  = "Account deleted successfully"});
+        }
+       #region helper method
         private void setTokenCookie(string refreshToken)
         {
             var cookieOptions = new CookieOptions
@@ -46,35 +101,7 @@ namespace stocks_backend.Controllers
             else
                 return HttpContext.Connection.RemoteIpAddress.MapToIPv4().ToString();
         }
-        [HttpPost("register")]
-        public IActionResult Register(RegisterRequest model)
-        {
-            _accountService.Register(model, Request.Headers["origin"]);
-            return Ok(new { message = "Registration successful, please check your email for verification instructions" });
-        }
-        [HttpPost("verify-email")]
-        public IActionResult VerifyEmail(VerifyEmailRequest model)
-        {
-            _accountService.VerifyEmail(model.Token);
-            return Ok(new { message = "Verification successful, you can now login"});
-        }
 
-        [HttpPost("refresh-token")]
-        public ActionResult<AuthenticateResponse> RefreshToken()
-        {
-            var refreshToken = Request.Cookies["refreshToken"];
-            var response = _accountService.RefreshToken(refreshToken, ipAddress());
-            setTokenCookie(response.RefreshToken);
-            return Ok(response);
-        }
-        [HttpDelete("{id:int}")]
-        public IActionResult Delete(int id)
-        {
-            //users can delete their own account and admin can delete any account
-            if (id != Account.Id && Account.Role != Role.Admin)
-               return Unauthorized(new { message = "Unauthorized"});
-            _accountService.Delete(id);
-            return Ok(new { message  = "Account deleted successfully"});
-        }
+        #endregion
     }
 }

@@ -1,4 +1,4 @@
-namespace stocks_backend.Heplers
+namespace stocks_backend.Helpers
 {
     public class AppSettings
     {

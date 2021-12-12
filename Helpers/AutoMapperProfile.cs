@@ -2,7 +2,7 @@ using AutoMapper;
 using stocks_backend.Entities;
 using stocks_backend.Models.Accounts;
 
-namespace stocks_backend.Heplers
+namespace stocks_backend.Helpers
 {
     public class AutoMapperProfile: Profile
     {

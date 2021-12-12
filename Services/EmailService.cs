@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Options;
-using stocks_backend.Heplers;
+using stocks_backend.Helpers;
 using MimeKit;
 using MimeKit.Text;
 using MailKit.Net.Smtp;

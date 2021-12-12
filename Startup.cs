@@ -6,7 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
-using stocks_backend.Heplers;
+using stocks_backend.Helpers;
 using stocks_backend.Services;
 using stocks_backend.Middleware;
 

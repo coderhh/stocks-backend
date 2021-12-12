@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using stocks_backend.Entities;
 
-namespace stocks_backend.Heplers
+namespace stocks_backend.Helpers
 {
     public class DataContext: DbContext
     {

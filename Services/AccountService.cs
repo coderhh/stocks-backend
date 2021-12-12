@@ -1,19 +1,18 @@
-using stocks_backend.Heplers;
 using stocks_backend.Models.Accounts;
 using AutoMapper;
 using BC = BCrypt.Net.BCrypt;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Primitives;
 using System.Linq;
 using System;
 using System.Security.Cryptography;
 using stocks_backend.Entities;
-using stocks_backend.Helpers;
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 using System.Collections.Generic;
+using stocks_backend.Helpers;
+using Microsoft.Extensions.Primitives;
 
 namespace stocks_backend.Services
 {
@@ -24,6 +23,8 @@ namespace stocks_backend.Services
         void Register(RegisterRequest model, string origin);
         void VerifyEmail(string token);
         void Delete(int id);
+        void RevokeToken(string token, string ipAddress);
+        void ForgotPassword(ForgotPasswordRequest model, string origin);
     }
 
     public class AccountService : IAccountService
@@ -237,6 +238,57 @@ namespace stocks_backend.Services
             var account = _context.Accounts.Find(id);
             if (account == null) throw new KeyNotFoundException("Account not found");
             return account;
+        }
+
+        public void RevokeToken(string token, string ipAddress)
+        {
+            var (refreshToken, account) = getRefreshToken(token);
+
+            // revoken token and save
+            refreshToken.Revoked = DateTime.UtcNow;
+            refreshToken.RevokedByIp = ipAddress;
+            _context.Update(account);
+            _context.SaveChanges();
+        }
+
+        public void ForgotPassword(ForgotPasswordRequest model, string origin)
+        {
+            var account = _context.Accounts.SingleOrDefault(x => x.Email == model.Email);
+            //always return ok response to prevent email enumeration
+            if (account == null) return;
+            // create reset token that expires after 1 day
+            account.ResetToken = randomTokenString();
+            account.ResetTokenExpires  = DateTime.UtcNow.AddDays(1);
+
+            _context.Accounts.Update(account);
+            _context.SaveChanges();
+
+            // send emails
+            sendPasswordResetEmail(account, origin);
+
+        }
+
+        private void sendPasswordResetEmail(Account account, string origin)
+        {
+            string message;
+            if (!string.IsNullOrEmpty(origin))
+            {
+                var resetUrl = $"{origin}/account/reset-password?token={account.ResetToken}";
+                message = $@"<p>Please click the below link to reset your password, the link will be valid for 1 day:</p>
+                             <p><a href=""{resetUrl}"">{resetUrl}</a></p>";
+            }
+            else
+            {
+                message = $@"<p>Please use the below token to reset your password with the <code>/accounts/reset-password</code> api route:</p>
+                             <p><code>{account.ResetToken}</code></p>";
+            }
+
+            _emailService.Send(
+                to: account.Email,
+                subject: "Sign-up Verification API - Reset Password",
+                html: $@"<h4>Reset Password Email</h4>
+                         {message}"
+            );
         }
     }
 }
