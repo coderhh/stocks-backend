@@ -25,7 +25,7 @@ namespace stocks_backend
         public void ConfigureServices(IServiceCollection services)
         {
             services.AddDbContext<DataContext>();
-            //services.AddCors();
+            services.AddCors();
             services.AddControllers().AddJsonOptions(x => x.JsonSerializerOptions.IgnoreNullValues = true);
             services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
             services.AddSwaggerGen();
@@ -53,7 +53,11 @@ namespace stocks_backend
 
             app.UseRouting();
 
-            //app.UseAuthorization();
+            app.UseCors(x => x
+                .SetIsOriginAllowed(origin => true)
+                .AllowAnyMethod()
+                .AllowAnyHeader()
+                .AllowCredentials());
 
             app.UseMiddleware<ErrorHandlerMiddleware>();
 

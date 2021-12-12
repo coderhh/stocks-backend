@@ -6,6 +6,7 @@ using stocks_backend.Models.Accounts;
 using stocks_backend.Services;
 using System;
 using stocks_backend.Entities;
+using stocks_backend.Models;
 
 namespace stocks_backend.Controllers
 {
@@ -29,7 +30,6 @@ namespace stocks_backend.Controllers
             setTokenCookie(response.RefreshToken);
             return Ok(response);
         }
-
         private void setTokenCookie(string refreshToken)
         {
             var cookieOptions = new CookieOptions
@@ -39,7 +39,6 @@ namespace stocks_backend.Controllers
             };
             Response.Cookies.Append("refreshToken", refreshToken, cookieOptions);
         }
-
         private string ipAddress()
         {
             if (Request.Headers.ContainsKey("X-Forwarded-For"))
@@ -47,19 +46,26 @@ namespace stocks_backend.Controllers
             else
                 return HttpContext.Connection.RemoteIpAddress.MapToIPv4().ToString();
         }
-
         [HttpPost("register")]
         public IActionResult Register(RegisterRequest model)
         {
             _accountService.Register(model, Request.Headers["origin"]);
             return Ok(new { message = "Registration successful, please check your email for verification instructions" });
         }
-
         [HttpPost("verify-email")]
         public IActionResult VerifyEmail(VerifyEmailRequest model)
         {
             _accountService.VerifyEmail(model.Token);
             return Ok(new { message = "Verification successful, you can now login"});
+        }
+
+        [HttpPost("refresh-token")]
+        public ActionResult<AuthenticateResponse> RefreshToken()
+        {
+            var refreshToken = Request.Cookies["refreshToken"];
+            var response = _accountService.RefreshToken(refreshToken, ipAddress());
+            setTokenCookie(response.RefreshToken);
+            return Ok(response);
         }
         [HttpDelete("{id:int}")]
         public IActionResult Delete(int id)

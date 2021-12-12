@@ -20,6 +20,7 @@ namespace stocks_backend.Services
     public interface IAccountService
     {
         AuthenticateResponse Authenticate(AuthenticateRequest model, string ipAddress);
+        AuthenticateResponse RefreshToken(string token, string ipAddress);
         void Register(RegisterRequest model, string origin);
         void VerifyEmail(string token);
         void Delete(int id);
@@ -98,7 +99,6 @@ namespace stocks_backend.Services
             };
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
-
         }
 
         public void Register(RegisterRequest model, string origin)
@@ -198,6 +198,38 @@ namespace stocks_backend.Services
             var account = getAccount(id);
             _context.Accounts.Remove(account);
             _context.SaveChanges();
+        }
+
+        public AuthenticateResponse RefreshToken(string token, string ipAddress)
+        {
+            var (refreshToken, account) = getRefreshToken(token);
+
+            // replace old refresh token with a new one and save
+            var newRefreshToken = generateRefreshToken(token);
+            refreshToken.Revoked = DateTime.UtcNow;
+            refreshToken.RevokedByIp = ipAddress;
+            refreshToken.ReplacedByToken = newRefreshToken.Token;
+            account.RefreshTokens.Add(newRefreshToken);
+            removeOldRefreshTokens(account);
+
+            _context.Update(account);
+            _context.SaveChanges();
+
+            // generate new jwt
+            var jwtToken = generateJwtToken(account);
+            var response = _mapper.Map<AuthenticateResponse>(account);
+            response.JwtToken = jwtToken;
+            response.RefreshToken = newRefreshToken.Token;
+            return response;
+        }
+
+        private (RefreshToken, Account) getRefreshToken(string token)
+        {
+            var account = _context.Accounts.SingleOrDefault(u => u.RefreshTokens.Any(t => t.Token == token));
+            if (account == null) throw new AppException("Invaliad token");
+            var refreshToken = account.RefreshTokens.Single(x => x.Token == token);
+            if (!refreshToken.IsActive) throw new AppException("Invalid token");
+            return (refreshToken, account);
         }
 
         private Account getAccount(int id)
