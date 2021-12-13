@@ -25,6 +25,10 @@ namespace stocks_backend.Services
         void Delete(int id);
         void RevokeToken(string token, string ipAddress);
         void ForgotPassword(ForgotPasswordRequest model, string origin);
+        void ValidateResetToken(ValidateResetTokenRequest model);
+        void ResetPassword(ResetPasswordRequest model);
+        IEnumerable<AccountResponse> GetAll();
+        AccountResponse GetById(int id);
     }
 
     public class AccountService : IAccountService
@@ -289,6 +293,51 @@ namespace stocks_backend.Services
                 html: $@"<h4>Reset Password Email</h4>
                          {message}"
             );
+        }
+
+        public void ValidateResetToken(ValidateResetTokenRequest model)
+        {
+            var account = _context.Accounts.SingleOrDefault(x =>
+                x.ResetToken == model.Token &&
+                x.ResetTokenExpires > DateTime.UtcNow);
+            if (account == null)
+                throw new AppException("Invalid token");
+        }
+
+        public void ResetPassword(ResetPasswordRequest model)
+        {
+            var account = _context.Accounts.SingleOrDefault(x =>
+                x.ResetToken == model.Token &&
+                x.ResetTokenExpires > DateTime.UtcNow);
+            if (account == null)
+                throw new AppException("Invalid token");
+            // update password and remove reset token
+            account.PasswordHash = BC.HashPassword(model.Password);
+            account.PasswordReset = DateTime.UtcNow;
+            account.ResetToken = null;
+            account.ResetTokenExpires = null;
+
+            _context.Accounts.Update(account);
+            _context.SaveChanges();
+        }
+
+        public IEnumerable<AccountResponse> GetAll()
+        {
+            var accounts = _context.Accounts;
+            return _mapper.Map<IList<AccountResponse>>(accounts);
+        }
+
+        public AccountResponse GetById(int id)
+        {
+            var account = GetAccount(id);
+            return _mapper.Map<AccountResponse>(account);
+        }
+
+        private Account GetAccount(int id)
+        {
+            var account = _context.Accounts.Find(id);
+            if (account == null) throw new KeyNotFoundException("Account not found");
+            return account;
         }
     }
 }

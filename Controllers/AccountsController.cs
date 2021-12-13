@@ -8,6 +8,7 @@ using System;
 using stocks_backend.Entities;
 using stocks_backend.Models;
 using stocks_backend.Helpers;
+using System.Collections.Generic;
 
 namespace stocks_backend.Controllers
 {
@@ -74,6 +75,12 @@ namespace stocks_backend.Controllers
             _accountService.ForgotPassword(model, Request.Headers["origin"]);
             return Ok(new { message = "Please check your email for password reset instructions"});
         }
+        [HttpPost("validate-reset-token")]
+        public IActionResult ValidateResetToken(ValidateResetTokenRequest model)
+        {
+            _accountService.ValidateResetToken(model);
+            return Ok(new { message = "Token is valid"});
+        }
 
         [HttpDelete("{id:int}")]
         public IActionResult Delete(int id)
@@ -84,6 +91,30 @@ namespace stocks_backend.Controllers
             _accountService.Delete(id);
             return Ok(new { message  = "Account deleted successfully"});
         }
+        [HttpPost("reset-password")]
+        public IActionResult ResetPassword(ResetPasswordRequest model)
+        {
+            _accountService.ResetPassword(model);
+            return Ok(new { message ="Password reset successful, you can now login"});
+        }
+        [Authorize(Role.Admin)]
+        [HttpGet]
+        public ActionResult<IEnumerable<AccountResponse>> GetAll()
+        {
+            var accounts = _accountService.GetAll();
+            return Ok(accounts);
+        }
+        [Authorize]
+        [HttpGet("{id:int}")]
+        public ActionResult<AccountResponse> GetById(int id)
+        {
+            // users can get their own account and admins can get any account
+            if (id != Account.Id && Account.Role != Role.Admin)
+                return Unauthorized(new { message = "Unauthorized"});
+            var account = _accountService.GetById(id);
+            return Ok(account);
+        }
+
        #region helper method
         private void setTokenCookie(string refreshToken)
         {
